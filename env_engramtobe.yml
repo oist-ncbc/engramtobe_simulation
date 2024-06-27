@@ -1,0 +1,8 @@
+name: engramtobe
+channels:
+  - conda-forge
+dependencies:
+  - matplotlib=3.6.2
+  - numpy=1.23.5
+  - python=3.10.9
+  - scipy=1.10.0
