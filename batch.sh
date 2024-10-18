@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for TEMP in sleepON sleepOFF
+for TEMP in sleepON sleepOFF homeostasisOFF sleepLTDOFF
 do
     for N in 1 2 3 4 5
     do

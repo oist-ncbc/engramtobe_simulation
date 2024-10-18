@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-import sys
 import numpy
-import scipy.stats
 import matplotlib.pyplot as plt
 
 Nshuffle = 100
@@ -14,7 +12,7 @@ Nfile = 5
 files = []
 for nf in range(Nfile):
     files.append("results"+str(nf+1)+".npz")
-#engram, r_som_pre, r_som_awake1, r_som_sleep1, r_som_awake2, preplay_log, replay_log
+#engram, r_som_pre, r_som_awake1, r_som_sleep1, r_som_awake2, preplay_log, replay_log, replay_log_afterB
 
 engram = []
 non_engram = []
@@ -22,6 +20,7 @@ r_som_awake1 = []
 r_som_awake2 = []
 preplay_log = []
 replay_log = []
+replay_log_afterB = []
 
 for f in files:
     results = numpy.load(f)
@@ -32,6 +31,7 @@ for f in files:
     r_som_awake2.append(results["r_som_awake2"])
     preplay_log.append(results["preplay_log"])
     replay_log.append(results["replay_log"])
+    replay_log_afterB.append(results["replay_log_afterB"])
 
 Npattern, N_CA1 = r_som_awake1[0].shape
 Nreplay = preplay_log[0].shape[0]
@@ -39,7 +39,7 @@ Nreplay = preplay_log[0].shape[0]
 ######################## analysis and plot ################################
 #classifying cells
 activity_count_threshold = 0.5
-engram_edu = []
+engram_com = []
 engram_spe = []
 engram_tobe = []
 nonengram_all = []
@@ -47,7 +47,7 @@ for nf in range(Nfile):
     awake2_active = (r_som_awake2[nf][1,:]>activity_count_threshold)
     awake2_inactive = numpy.logical_not(awake2_active)
 
-    engram_edu.append(engram[nf]*awake2_active)
+    engram_com.append(engram[nf]*awake2_active)
     engram_spe.append(engram[nf]*awake2_inactive)
     engram_tobe.append(non_engram[nf]*awake2_active)
     nonengram_all.append(non_engram[nf]*numpy.logical_not(engram_tobe[nf]))
@@ -55,11 +55,11 @@ for nf in range(Nfile):
 #save cell type ratio 
 celltype_ratio = ["engram, engram-to-be, non-engram\n"]
 for nf in range(Nfile):
-    edu_ratio = numpy.sum(engram_edu[nf])/N_CA1
+    com_ratio = numpy.sum(engram_com[nf])/N_CA1
     spe_ratio = numpy.sum(engram_spe[nf])/N_CA1
     tobe_ratio = numpy.sum(engram_tobe[nf])/N_CA1
     non_ratio = numpy.sum(nonengram_all[nf])/N_CA1
-    celltype_ratio.append(f"data {nf}: {edu_ratio+spe_ratio:.3f}, {tobe_ratio:.3f}, {non_ratio:.3f}\n")
+    celltype_ratio.append(f"data {nf}: {com_ratio+spe_ratio:.3f}, {tobe_ratio:.3f}, {non_ratio:.3f}\n")
 with open("celltype_ratio.txt", "w") as f:        
     f.writelines(celltype_ratio)
 
@@ -131,7 +131,7 @@ plt.title("Pattern B")
 plt.ylabel("Matching ratio")
 plt.xticks([0,1], ["pre-sleep", "post-sleep"])
 plt.xlim([-0.2, 1.2])
-plt.ylim([-0.05,1.05])
+plt.ylim([-0.05,0.35])
 plt.yticks(0.1*numpy.arange(4))
 plt.legend(loc="upper right")
 plt.gca().spines["right"].set_visible(False)
@@ -142,6 +142,37 @@ plt.close()
 #save results in csv
 numpy.savetxt("matching_ratio_B_presleep.csv", numpy.vstack([corpre_log["engram+engram-to-be"], corpre_log["other non-engram"]]).T, delimiter=",", fmt="%f")
 numpy.savetxt("matching_ratio_B_postsleep.csv", numpy.vstack([corre_log["engram+engram-to-be"], corre_log["other non-engram"]]).T, delimiter=",", fmt="%f")
+
+#Matching ratio (pattern B, sleep after session B)
+plt.figure(figsize=(3,3))
+PVD_log = dict([])
+PVD_log["engram-to-be"] = numpy.zeros(Nfile)
+PVD_log["other non-engram"] = numpy.zeros(Nfile)
+for nf in range(Nfile):
+    for idx, label, color in [(engram_tobe[nf], "engram-to-be", "red"), (nonengram_all[nf], "other non-engram", "blue")]:
+        replay_log_norm = replay_log_afterB[nf][:,idx]
+        replay_log_norm = replay_log_norm / numpy.linalg.norm(replay_log_norm,axis=1,keepdims=True)
+        pattern = r_som_awake2[nf][1,idx]
+        pattern = pattern / numpy.linalg.norm(pattern)
+        MR = numpy.mean(numpy.greater(replay_log_norm@pattern,0.6))
+        plot_pos = int(label=="other non-engram")
+        plt.plot(plot_pos, MR, "-o", color=color)
+        PVD_log[label][nf] = MR
+plt.title("Sleep after session B")
+plt.ylabel("Matching ratio")
+plt.xticks([0,1], ["engram-to-be", "other\nnon-engram"])
+plt.xlim([-0.5, 1.5])
+#plt.ylim([-0.05,0.35])
+#plt.yticks(0.1*numpy.arange(4))
+#plt.legend(loc="upper right")
+plt.gca().spines["right"].set_visible(False)
+plt.gca().spines["top"].set_visible(False)
+plt.tight_layout()
+plt.savefig("matching_ratio_replayB.tiff")
+plt.close()
+#save results in csv
+numpy.savetxt("matching_ratio_replayB.csv", numpy.vstack([PVD_log["engram-to-be"], PVD_log["other non-engram"]]).T, delimiter=",", fmt="%f")
+
 
 ##### mix silent bins #####
 for nf in range(Nfile):
@@ -191,34 +222,72 @@ plt.close()
 numpy.savetxt("correlation_presleep.csv", cormean_log_pre.T, delimiter=",", fmt="%f")
 numpy.savetxt("correlation_postsleep.csv", cormean_log_post.T, delimiter=",", fmt="%f")
 
+
+#coincidence ratio (pre-sleep)
+plt.figure(figsize=(6,3))
+cormean_log = numpy.zeros([4,Nfile])
+for nf in range(Nfile):
+    xpos = 0
+    for idx1, idx2 in [[engram_com[nf],engram_tobe[nf]], [engram_spe[nf], engram_tobe[nf]], [engram_com[nf], nonengram_all[nf]], [engram_spe[nf], nonengram_all[nf]]]:
+        data1 = preplay_log[nf][:,idx1]
+        data2 = preplay_log[nf][:,idx2]
+        data1 = numpy.mean(data1, axis=1)
+        data2 = numpy.mean(data2, axis=1)
+        #coincidence
+        coin = numpy.mean(data1*data2)
+        data_norm = numpy.mean(data1) * numpy.mean(data2)
+        cor = coin / data_norm
+
+        cormean_log[xpos,nf] = cor
+        xpos += 1
+#plot, normalize
+for nf in range(Nfile):
+    norm = cormean_log[1,nf]
+    for xpos in range(4):
+        cormean_log[xpos, nf] = cormean_log[xpos, nf]/norm
+        plt.plot(xpos, cormean_log[xpos, nf], "o", color="black")
+
+cormean_log_pre = cormean_log
+
+plt.ylabel("Coincidence ratio (normalized)")
+plt.xticks([0,1,2,3], ["common-engram\nengram-to-be", "engram-specific\nengram-to-be", "common-engram\nnon-engram", "engram-specific\nnon-engram"])
+plt.xlim([-0.5, 3.5])
+plt.gca().spines["right"].set_visible(False)
+plt.gca().spines["top"].set_visible(False)
+plt.tight_layout()
+plt.savefig("coincidence_presleep.tiff")
+plt.close()
+#save results in csv
+numpy.savetxt("coincidence_presleep.csv", cormean_log.T, delimiter=",", fmt="%f")
+
 #coincidence ratio (post-sleep)
 plt.figure(figsize=(6,3))
 cormean_log = numpy.zeros([4,Nfile])
 for nf in range(Nfile):
     xpos = 0
-    for idx1, idx2 in [[engram_edu[nf],engram_tobe[nf]], [engram_spe[nf], engram_tobe[nf]], [engram_edu[nf], nonengram_all[nf]], [engram_spe[nf], nonengram_all[nf]]]:
+    for idx1, idx2 in [[engram_com[nf],engram_tobe[nf]], [engram_spe[nf], engram_tobe[nf]], [engram_com[nf], nonengram_all[nf]], [engram_spe[nf], nonengram_all[nf]]]:
         data1 = replay_log[nf][:,idx1]
         data2 = replay_log[nf][:,idx2]
         data1 = numpy.mean(data1, axis=1)
         data2 = numpy.mean(data2, axis=1)
         #coincidence
-        data_norm = numpy.min([numpy.sum(data1),numpy.sum(data2)])
-        cor = numpy.sum(data1*data2)/data_norm
-        cormean = cor
-        #shuffle
-        cormean_shuffle = 0.0
-        for r in range(Nshuffle):
-            data1_shuffle = numpy.random.permutation(data1)
-            data2_shuffle = numpy.random.permutation(data2)
-            cor_shuffle = numpy.sum(data1_shuffle*data2_shuffle)/data_norm
-            cormean_shuffle += cor_shuffle/Nshuffle
-        cormean -= cormean_shuffle
-        #plot
-        plt.plot(xpos, cormean, "o", color="black")
-        cormean_log[xpos,nf] = cormean
+        coin = numpy.mean(data1*data2)
+        data_norm = numpy.mean(data1) * numpy.mean(data2)
+        cor = coin / data_norm
+
+        cormean_log[xpos,nf] = cor
         xpos += 1
+#plot, normalize
+for nf in range(Nfile):
+    norm = cormean_log[1,nf]
+    for xpos in range(4):
+        cormean_log[xpos, nf] = cormean_log[xpos, nf] / norm
+        plt.plot(xpos, cormean_log[xpos, nf], "o", color="black")
+
+cormean_log_post = cormean_log
+
 plt.ylabel("Coincidence ratio (normalized)")
-plt.xticks([0,1,2,3], ["engram-educating\nengram-to-be", "engram-specific\nengram-to-be", "engram-educating\nnon-engram", "engram-specific\nnon-engram"])
+plt.xticks([0,1,2,3], ["common-engram\nengram-to-be", "engram-specific\nengram-to-be", "common-engram\nnon-engram", "engram-specific\nnon-engram"])
 plt.xlim([-0.5, 3.5])
 plt.gca().spines["right"].set_visible(False)
 plt.gca().spines["top"].set_visible(False)
@@ -228,3 +297,19 @@ plt.close()
 #save results in csv
 numpy.savetxt("coincidence_postsleep.csv", cormean_log.T, delimiter=",", fmt="%f")
 
+#plot coincidence pre-post
+for nf in range(Nfile):
+    norm = cormean_log_pre[1,nf]
+    plt.plot(0, cormean_log_pre[0, nf]/norm, "o", color="black")
+    plt.plot(1, cormean_log_pre[1, nf]/norm, "o", color="black")
+    norm = cormean_log_post[1,nf]
+    plt.plot(2, cormean_log_post[0, nf]/norm, "o", color="black")
+    plt.plot(3, cormean_log_post[1, nf]/norm, "o", color="black")
+plt.ylabel("Coincidence ratio (normalized)")
+plt.xticks([0,1,2,3], ["common engram\nengram-to-be\npre-sleep", "specific engram\nengram-to-be\npre-sleep", "common engram\nengram-to-be\npost-sleep", "specific engram\nengram-to-be\npost-sleep"])
+plt.xlim([-0.5, 3.5])
+plt.gca().spines["right"].set_visible(False)
+plt.gca().spines["top"].set_visible(False)
+plt.tight_layout()
+plt.savefig("coincidence_prepost.tiff")
+plt.close()

@@ -6,12 +6,22 @@ import matplotlib.pyplot as plt
 
 if sys.argv[1] == "sleepON":
     print("offline plasticity ON.")
-    sleepON = True
+    homeoON = True
+    LTDON = True
 elif sys.argv[1] == "sleepOFF":
     print("offline plasticity OFF.")
-    sleepON = False
+    homeoON = False
+    LTDON = False
+elif sys.argv[1] == "homeostasisOFF":
+    print("homeostatic plasticity OFF.")
+    homeoON = False
+    LTDON = True
+elif sys.argv[1] == "sleepLTDOFF":
+    print("sleepLTD OFF.")
+    homeoON = True
+    LTDON = False
 else:
-    print("please specify sleepON or sleepOFF.")
+    print("please specify sleepON, sleepOFF, homeostasisOFF, sleepLTDOFF.")
     exit()
 
 #parameters
@@ -112,12 +122,15 @@ CA3_engram = pattern_CA3[0,:]
 CA3_nonengram = numpy.logical_not(CA3_engram)
 
 #offline plasticity
-if sleepON:
-    #SWR-LTD
+#SWR-LTD
+if LTDON:
     w_CA3 = relu(w_CA3 - eta * numpy.outer(non_engram, CA3_engram))
-    #scaling
+#scaling
+if homeoON:
     w_CA3 = relu(w_CA3 - eta * numpy.outer(engram, CA3_nonengram))
+if homeoON and LTDON:
     w_CA3 = relu(w_CA3 + eta * numpy.outer(non_engram, CA3_nonengram))
+    #no LTD in non-engram -> no LTP
 
 #simulation of activity
 replay_log = numpy.zeros([Nreplay, N_CA1])
@@ -139,10 +152,35 @@ CA3_activity = pattern_CA3[1,:]
 s = simulation_batch(CA3_activity)
 engram2 = (s>engram_threshold)
 w_CA3 = w_CA3 + eta * numpy.outer(engram2, CA3_activity)
+non_engram2 = numpy.logical_not(engram2)
 #simulation
 r_som_awake2 = numpy.zeros([Npattern, N_CA1])
 for i in range(Npattern):
     r_som_awake2[i,:] = simulation_batch(pattern_CA3[i,:])
+
+#sleep 2
+print("sleep 2")
+CA3_engram2 = pattern_CA3[1,:]
+CA3_nonengram2 = numpy.logical_not(CA3_engram2)
+
+#SWR-LTD
+w_CA3 = relu(w_CA3 - eta * numpy.outer(non_engram2, CA3_engram2))
+#scaling
+w_CA3 = relu(w_CA3 - eta * numpy.outer(engram2, CA3_nonengram2))
+w_CA3 = relu(w_CA3 + eta * numpy.outer(non_engram2, CA3_nonengram2))
+
+#simulation of activity
+replay_log_afterB = numpy.zeros([Nreplay, N_CA1])
+for i in range(Nreplay):
+    if numpy.random.rand()<replay_bias:
+        CA3_activity = pattern_CA3[1,:] * fluctuate(N_CA3)
+    else:
+        CA3_activity = (numpy.random.rand(N_CA3)<p_CA3) * fluctuate(N_CA3)
+    s = simulation_batch(CA3_activity)
+    replay_log_afterB[i,:] = s
+r_som_sleep2 = numpy.zeros([Npattern, N_CA1])
+for i in range(Npattern):
+    r_som_sleep2[i,:] = simulation_batch(pattern_CA3[i,:])
 
 print("simulation end.")
 
@@ -153,7 +191,9 @@ numpy.savez("results.npz",
     r_som_pre=r_som_pre, 
     r_som_awake1=r_som_awake1, 
     r_som_sleep1=r_som_sleep1, 
-    r_som_awake2=r_som_awake2, 
+    r_som_awake2=r_som_awake2,
+    r_som_sleep2=r_som_sleep2, 
     preplay_log=preplay_log, 
     replay_log=replay_log, 
+    replay_log_afterB=replay_log_afterB,
     )
