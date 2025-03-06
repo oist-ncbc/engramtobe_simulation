@@ -1,5 +1,5 @@
 # engramtobe_simulation
-Codes for simulations and analyses in Ghandour, Haga, Ohkawa et al., "Dual roles of idling moments for past and future memories".
+Codes for simulations and analyses in Ghandour, Haga, Ohkawa et al., "Past memories are conserved via reactivation whereas future memories are prepared via offline synaptic plasticity mechanisms during idling moments".
 
 Codes depend on Python 3, numpy, scipy, matplotlib, and a UNIX shell script (bash). With Anaconda (or Miniconda), you can run `conda env create -f env_engramtobe.yml` then `conda activate engramtobe` to create an appropreate environment.
 
